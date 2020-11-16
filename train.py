@@ -48,8 +48,9 @@ def config():
     compressed=True,
   )
   learner = Learner.DEFAULT_CONFIG
-  network = networks.DEFAULT_CONFIG
+  # network = networks.DEFAULT_CONFIG
   # network = networks.LSTM_CONFIG
+  network = networks.GRU_CONFIG
   expt_dir = get_experiment_directory()
 
 @ex.automain
