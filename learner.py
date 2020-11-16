@@ -19,11 +19,15 @@ class Learner:
   def __init__(self,
       embed_game: embed.Embedding,
       learning_rate: float,
-      network: snt.Module):
+      network: snt.Module,
+      network_name: str,
+      **config):
     self.embed_game = embed_game
     self.network = network
+    self.network_name = network_name
     self.controller_head = snt.Linear(embed.embed_controller.size)
     self.optimizer = snt.optimizers.Adam(learning_rate)
+    print(f'Using network: {self.network_name}')
 
   @tf.function
   def step(self, batch, train=True):
@@ -31,14 +35,14 @@ class Learner:
 
     flat_gamestate = self.embed_game(gamestate)
     prev_gamestate = flat_gamestate[:-1]
-
+    # (num_timesteps, batch_size, num_states)
+    
     p1_controller = gamestate['player'][1]['controller_state']
     next_action = tf.nest.map_structure(lambda t: t[1:], p1_controller)
 
-    # import code; code.interact(local=dict(globals(), **locals()))
-
     with tf.GradientTape() as tape:
-      outputs = self.network(prev_gamestate)
+      outputs = self.network(prev_gamestate, restarting = restarting)
+
       controller_prediction = self.controller_head(outputs)
       next_action_distances = embed.embed_controller.distance(
           controller_prediction, next_action)
@@ -50,4 +54,5 @@ class Learner:
       params = self.network.trainable_variables
       grads = tape.gradient(loss, params)
       self.optimizer.apply(grads, params)
+    
     return loss
