@@ -1,8 +1,8 @@
 import sonnet as snt
 import tensorflow as tf
 
+from policies import ActorCritic
 from policies import Policy
-from policies import RLPolicy, RLQfunc
 
 def to_time_major(t):
   permutation = list(range(len(t.shape)))

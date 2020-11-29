@@ -97,16 +97,16 @@ class RLTrainManager():
     self.curr_step = 0
     self.phase_idx = 0
 
-    self.init_hidden_states = (
+    self.init_hidden_states = [
         learner.actorcritic.q_net.initial_state(data_source.batch_size),
-        learner.actorcritic.policy.initial_state(data_source.batch_size))
+        learner.actorcritic.policy.initial_state(data_source.batch_size)]
     self.hidden_states = self.init_hidden_states
 
     self.freeze_intervals = (q_freeze_interval, policy_freeze_interval)
     self.steps_since_freeze = (0, 0)
-    self.frozen_nets = (
+    self.frozen_nets = [
         learner.actorcritic.q_net, 
-        learner.actorcritic.policy)
+        learner.actorcritic.policy]
 
   def freeze_net(self, phase):
     # TODO - Check this works. Verify this freezes controller head too
@@ -127,15 +127,15 @@ class RLTrainManager():
     with self.data_profiler:
       batch = sanitize_batch(next(self.data_source))
     with self.step_profiler:
-      stats, self.hidden_states = self.learner.compiled_step(
+      # stats, self.hidden_states = self.learner.compiled_step(
+      #     batch, self.hidden_states, phase, self.frozen_nets, **self.step_kwargs)
+      # TODO - remove this before pushing
+      stats, self.hidden_states = self.learner.step(
           batch, self.hidden_states, phase, self.frozen_nets, **self.step_kwargs)
 
     # Freeze models
     self.steps_since_freeze[p] += 1
     if self.steps_since_freeze[p] >= self.freeze_intervals[p]:
-      # update self.frozen_nets
-      # access through self.learner.
-      pass
       self.freeze_net(phase)
       self.steps_since_freeze[p] = 0
 

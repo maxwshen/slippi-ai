@@ -10,9 +10,11 @@ embed_game = embed.make_game_embedding(
     player_config=dict(with_controller=False))
 
 def process_inputs(inputs):
-  gamestate, p1_controller_embed = inputs
+  gamestate, p1_controller_embed, action_repeat = inputs
   gamestate_embed = embed_game(gamestate)
-  return tf.concat([gamestate_embed, p1_controller_embed], -1)
+  action_repeat = tf.cast(action_repeat, dtype=tf.float32)
+  action_repeat = tf.expand_dims(action_repeat, axis=-1)
+  return tf.concat([gamestate_embed, p1_controller_embed, action_repeat], -1)
 
 class Network(snt.Module):
 
