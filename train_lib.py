@@ -69,8 +69,9 @@ class RLTrainManager():
 
   # TODO - Make RLTrainManager configurable with policy_eval_steps and policy_iter_steps
   DEFAULT_CONFIG = dict(
-      policy_eval_steps=10,
-      policy_iter_steps=10,
+      # policy_eval_steps=1000,
+      policy_eval_steps=50,
+      policy_iter_steps=1000,
       q_freeze_interval=500,
       policy_freeze_interval=500,
   )
@@ -78,22 +79,22 @@ class RLTrainManager():
   def __init__(self, 
       learner, 
       data_source, 
-      policy_eval_steps: int = 10,
-      policy_iter_steps: int = 10,
-      q_freeze_interval: int = 500,
-      policy_freeze_interval: int = 500,
-      step_kwargs={}
+      train: bool,
+      policy_eval_steps: int,
+      policy_iter_steps: int,
+      q_freeze_interval: int,
+      policy_freeze_interval: int,
       ):
     self.learner = learner
     self.data_source = data_source
-    self.step_kwargs = step_kwargs
+    self.train = train
 
     self.data_profiler = utils.Profiler()
     self.step_profiler = utils.Profiler()
 
     self.phase_idx_cycler = itertools.cycle((0, 1))
     self.phases = ('policy evaluation', 'policy iteration')
-    self.num_steps = (policy_eval_steps, policy_iter_steps)
+    self.num_steps = [policy_eval_steps, policy_iter_steps]
     self.curr_step = 0
     self.phase_idx = 0
 
@@ -102,8 +103,8 @@ class RLTrainManager():
         learner.actorcritic.policy.initial_state(data_source.batch_size)]
     self.hidden_states = self.init_hidden_states
 
-    self.freeze_intervals = (q_freeze_interval, policy_freeze_interval)
-    self.steps_since_freeze = (0, 0)
+    self.freeze_intervals = [q_freeze_interval, policy_freeze_interval]
+    self.steps_since_freeze = [0, 0]
     self.frozen_nets = [
         learner.actorcritic.q_net, 
         learner.actorcritic.policy]
@@ -127,15 +128,16 @@ class RLTrainManager():
     with self.data_profiler:
       batch = sanitize_batch(next(self.data_source))
     with self.step_profiler:
-      # stats, self.hidden_states = self.learner.compiled_step(
-      #     batch, self.hidden_states, phase, self.frozen_nets, **self.step_kwargs)
+      stats, self.hidden_states = self.learner.compiled_step(
+          batch, self.hidden_states, phase, self.frozen_nets, train=self.train)
       # TODO - remove this before pushing
-      stats, self.hidden_states = self.learner.step(
-          batch, self.hidden_states, phase, self.frozen_nets, **self.step_kwargs)
+      # stats, self.hidden_states = self.learner.step(
+      #     batch, self.hidden_states, phase, self.frozen_nets, train=self.train)
 
     # Freeze models
     self.steps_since_freeze[p] += 1
     if self.steps_since_freeze[p] >= self.freeze_intervals[p]:
+      print(f'Freezing net ...')
       self.freeze_net(phase)
       self.steps_since_freeze[p] = 0
 

@@ -131,7 +131,8 @@ def compress_repeated_actions(game, rewards, embed_controller, max_repeat):
 
   compressed_game = tree.map_structure(lambda a: a[indices], game)
   sum_rewards = np.array([sum(rewards[idx-count:idx+1]) for idx, count in zip(indices, counts)])
-  # counts = counts.astype('float64')
+  # counts = counts.astype('float32')
+  sum_rewards = sum_rewards.astype('float32')
   return compressed_game, counts, sum_rewards
 
 def _charset(chars):

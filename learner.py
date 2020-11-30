@@ -71,7 +71,7 @@ class RLLearner:
 
   def step(self, batch, initial_states, phase, frozen_nets, train=True):
     '''
-      initial_states: (initial_states_q, initial_states_policy)
+      initial_states: [initial_states_q, initial_states_policy]
     '''
     bm_gamestate, restarting = batch
 
@@ -104,10 +104,10 @@ class RLLearner:
     if train:
       params = tape.watched_variables()
       watched_names = [p.name for p in params]
-      trainable_names = [v.name for v in phase_func.trainable_variables]
-      assert set(watched_names) == set(trainable_names)
+      # trainable_names = [v.name for v in loss_func.trainable_variables]
+      # assert set(watched_names) == set(trainable_names)
       grads = tape.gradient(mean_loss, params)
       self.optimizer.apply(grads, params)
 
-    # final_states is (final_state_q, final_state_policy)
+    # final_states is [final_state_q, final_state_policy]
     return stats, final_states

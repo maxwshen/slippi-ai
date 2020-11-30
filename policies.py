@@ -79,6 +79,7 @@ class ActorCritic(snt.Module):
 
     # TODO - make configurable, consider implementing batched sampling
     self.num_policy_samples = 10
+    self.num_advantage_samples = 30
 
   '''
     Policy evaluation and Q-function methods
@@ -107,44 +108,77 @@ class ActorCritic(snt.Module):
     prev_gamestate = tf.nest.map_structure(lambda t: t[:-1], gamestate)
     next_gamestate = tf.nest.map_structure(lambda t: t[1:], gamestate)
 
-    # TODO next: for loop over self.num_policy_samples
     # TODO - Consider implementing batch sampling
-    sampled_controller_with_repeat, final_state_policy = self.policy.sample(
-        gamestate, initial_state_policy)
-    next_sampled_controller_with_repeat = tf.nest.map_structure(lambda t: t[1:],
-        sampled_controller_with_repeat)
+    q_samples = tf.TensorArray(tf.float32, size=self.num_policy_samples)
+    for k in range(self.num_policy_samples):
+      sampled_controller_with_repeat, final_state_policy = frozen_policy.sample(
+          gamestate, initial_state_policy)
+      next_sampled_controller_with_repeat = tf.nest.map_structure(lambda t: t[1:],
+          sampled_controller_with_repeat)
 
-    # replace controller in next_gamestate with sampled controller actions from policy
-    next_sampled_gamestate = write_p1_controller(next_gamestate,
-        next_sampled_controller_with_repeat)
+      # Replace controller in next_gamestate with
+      # sampled controller actions from policy
+      next_sampled_gamestate = write_p1_controller(next_gamestate,
+          next_sampled_controller_with_repeat)
 
-    # Run frozen q-function on policy_samples
-    q_samples, _ = self.q_predict(next_sampled_gamestate,
-        initial_state_q, frozen_q_net)
-    # shape: (T, B, 1) with q_head
-    import pdb; pdb.set_trace()
-    
-    # Aggregate expected_future_q over policy samples
-    expected_future_q = tf.reduce_mean(q_samples, axis=-1)
+      # Run frozen q-function on policy_samples
+      q_sample, _ = self.q_predict(next_sampled_gamestate,
+          initial_state_q, frozen_q_net)
+      q_samples.write(k, q_sample)
 
-    # prev_rewards: (T, B)
+    q_samples = q_samples.stack()
+    q_samples = tf.squeeze(q_samples, axis=-1)
+    expected_future_q = tf.reduce_mean(q_samples, axis=0)
+
     targets = prev_rewards + expected_future_q
     tf.stop_gradient(targets)
 
     predicted, final_state_q = self.q_predict(prev_gamestate, initial_state_q, self.q_net)
     predicted = tf.squeeze(predicted, axis=-1)
-    # predicted / targets: (T, B)
+    # predicted, targets: (T, B)
     loss = tf.reduce_mean(tf.square(predicted - targets))
 
-    return loss, (final_state_q, final_state_policy)
+    return loss, [final_state_q, final_state_policy]
 
   '''
     Policy iteration and Q-function methods
   '''
   def policy_iteration_loss(self, gamestate, initial_states, frozen_nets):
+    '''
+      Update policy
+    '''
     unpacked_gamestate, action_repeat, rewards = gamestate
     initial_state_q, initial_state_policy = initial_states
-    frozen_q_net, frozen_policy_net = frozen_nets
+    frozen_q_net, frozen_policy = frozen_nets
 
-    return loss, (final_state_q, final_state_policy)
+    # Sample K actions from states using policy
+    # Calculate advantage using frozen Q
+    q_samples = tf.TensorArray(tf.float32, size=self.num_advantage_samples)
+    for k in range(self.num_advantage_samples):
+      sampled_controller_with_repeat, final_state_policy = self.policy.sample(
+          gamestate, initial_state_policy)
+
+      # Replace controller in gamestate with
+      # sampled controller actions from policy
+      sampled_gamestate = write_p1_controller(gamestate,
+          sampled_controller_with_repeat)
+
+      # Run frozen q-function on policy_samples
+      q_sample, _ = self.q_predict(sampled_gamestate,
+          initial_state_q, frozen_q_net)
+      q_samples.write(k, q_sample)
+
+    q_samples = q_samples.stack()
+    q_samples = tf.squeeze(q_samples, axis=-1)
+
+    # Compute advantage
+    advantages = q_samples - tf.reduce_mean(q_samples, axis=0)
+    # (N, T, B)
+    import pdb; pdb.set_trace()
+
+    # ? Compute p(a|s) from policy (how to do?)
+
+    # Form loss
+
+    return loss, [final_state_q, final_state_policy]
 
